@@ -2,7 +2,7 @@ name: Cron Job | Web Scraping
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: '0 0 * * *' # schedule the task to run every day at midnight
 
 jobs:
   run_script:
