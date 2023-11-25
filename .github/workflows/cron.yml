@@ -34,5 +34,5 @@ jobs:
           EMAIL                : ${{ secrets.EMAIL }}
           PASSWORD             : ${{ secrets.PASSWORD }} 
       run: |        
-        python scraper.py
+        python main.py
        
