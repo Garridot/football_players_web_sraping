@@ -11,7 +11,7 @@ load_dotenv() # take environment variables from .env.
 API_AUTH_URL         = os.getenv('API_AUTH_URL')     # API endpoint for authentication
 API_PLAYER_STATS_URL = os.getenv('API_PLAYER_STATS_URL') # API endpoint for players stats
 API_PLAYERS_URL      = os.getenv('API_PLAYERS_URL')      # API endpoint for players 
-
+API_STATS_BY_POSITION_URL = os.getenv('API_STATS_BY_POSITION_URL' ) # API endpoint for players stats by position
 EMAIL    = os.getenv('EMAIL')
 PASSWORD = os.getenv('PASSWORD')
 
@@ -36,7 +36,7 @@ def get_auth_token():
 # Define headers at the module level to avoid repetition
 HEADERS = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36'}
 
-def get_config_scraping(url): 
+def config_scraper(url): 
     """
     Perform the HTTP request and return the BeautifulSoup object.
     """
@@ -49,24 +49,26 @@ def get_player_stats(player, update=False):
     """
     Get player statistics and call the web_scraping function.
     """
-    soup = get_config_scraping(player["url"])
+    soup = config_scraper(player["url"])
     
-    web_scraping_player_data(player,soup)
+    # scraper_player_data(player,soup)
 
     if update: 
         # Get information for the current season
         year   = soup.find('select').find_all('option')[1].get('value')
         season = soup.find('select').find_all('option')[1].text
-        web_scraping_stats(player, year, season)
+        scraper_general_stats(player, year, season)
+        scraper_stats_by_position(soup, player, year, season)
     else:  
         # Get information for all seasons
         lists = soup.find('select').find_all('option')[1:]
         for item in lists[1:]:
-            year, season = item.get('value'), item.text
-            web_scraping_stats(player, year, season)
+            year, season = item.get('value'), item.text            
+            scraper_general_stats(player, year, season)
+            scraper_stats_by_position(soup, player, year, season)
             
             
-def web_scraping_player_data(player,soup): 
+def scraper_player_data(player,soup): 
     URL = f'{API_PLAYERS_URL}{player["id"]}/'       
     
     response_get = requests.get(URL, {"Content-Type": "application/json"}).json()    
@@ -103,21 +105,20 @@ def web_scraping_player_data(player,soup):
         print(f"Data updated successfully for player: {response_put.json()}")
     else:
         print(f"Failed to update data for player: {response_put.json()}") ,
-    
-            
-def web_scraping_stats(player, year, season):
+                
+def scraper_general_stats(player, year, season):
     """
     Perform web scraping of statistics and display general statistics.
     """
     url = f"{player['url']}?saison={year}"
-    soup = get_config_scraping(url)
+    soup = config_scraper(url)
 
     dfs = []
 
     # Find and process each statistics box on the page
-    boxes = soup.find('div',class_='large-8 columns').find_all('div',class_='box')       
+    table_stats = soup.find('div',class_='large-8 columns').find_all('div',class_='box')       
     
-    for box in boxes[2:]:
+    for box in table_stats[2:]:
         competition = box.find('div',class_='table-header img-vat').find('a').text.strip() 
         # get on which team the player plays 
         team   = box.find_all('td',class_='zentriert')[3].find('a').get('title')            
@@ -128,13 +129,13 @@ def web_scraping_stats(player, year, season):
             table = pd.read_html(str(stat))[0]
             table['competition'] = competition
             table['team'] = team
-            table['season'] = season
-            table = clean_data(table)             
+            table['season'] = season            
+            table = clean_general_stats(table)             
             dfs.append(table)
     
     if dfs: 
         # Concatenate all collected DataFrames
-        df = pd.concat(dfs, ignore_index=True)      
+        df = pd.concat(dfs, ignore_index=True)                     
         
         # Add additional columns
         df['victory'] = df.apply(lambda row: 1 if get_match_result(row) == 'victory' else 0, axis=1)
@@ -144,22 +145,57 @@ def web_scraping_stats(player, year, season):
         # Calculate general statistics and display the result
         general_stats = df.groupby(['competition', 'team', 'season']).sum()
         games = df.groupby(['competition', 'team', 'season']).count().reset_index()['result']
-        general_stats['games'] = games.tolist() 
+        general_stats['games'] = games.tolist()   
+
+        save_general_stats(player,general_stats)
+
+def scraper_stats_by_position(soup, player, year, season):
+    url  = f"{player['url']}?saison={year}"
+    soup = config_scraper(url)
+
+    tables = soup.find_all('table')
+
+    df = None
+
+    for table in tables:
+        if table.find('th', text='Played as...'):
+            df = pd.read_html(str(table))[0]           
+            break
+
+    if df is not None:       
+
+        # rename columns   
+        df = df.rename(columns={'Unnamed: 1':'games','Unnamed: 2':'goals', 'Unnamed: 3':'assists'})  
         
-        save_player_stats(player,general_stats)
+        # replace NaN values with zeros
+        df['goals']   = df['goals'].astype(str).str.replace("-","0")
+        df['assists'] = df['assists'].astype(str).str.replace("-","0") 
 
+        # convert strings to integers
+        df['games']   = df['games'].astype(int)
+        df['goals']   = df['goals'].astype(int) 
+        df['assists'] = df['assists'].astype(int)   
 
-def clean_data(table):    
+        df["player"] = player["id"]
+        df["season"] = season
+
+        # reformat the dates in the 'season' column
+        df['season'] = df['season'].str.replace(r'(\d{2})/(\d{2})', r'20\1-20\2')
+
+        save_stats_by_position(player, df)
+       
+
+def clean_general_stats(table):    
     """
     Perform cleaning and transformations on the statistics DataFrame.
     """    
     # delete the row 'total'
     table = table[table['Date'].str.contains('Squad') == False ] 
     # Drop unnecessary columns
-    columns_to_drop = ['Matchday','Date', 'For','For.1', 'Opponent','Unnamed: 11','Unnamed: 12','Unnamed: 13','Unnamed: 15','Unnamed: 16','Unnamed: 17']
+    columns_to_drop = ['Matchday','For','For.1', 'Opponent','Unnamed: 11','Unnamed: 12','Unnamed: 13','Unnamed: 15','Unnamed: 16','Unnamed: 17']
     table = table.drop(columns=columns_to_drop, errors='ignore')
     # rename columns        
-    table = table.rename(columns={'Venue':'venue','Opponent.1':'opponent','Result':'result','Unnamed: 9':'goals','Unnamed: 10':'assists','Unnamed: 14':'minutes played'})  
+    table = table.rename(columns={'Date':'date','Venue':'venue','Opponent.1':'opponent','Result':'result','Unnamed: 9':'goals','Unnamed: 10':'assists','Unnamed: 14':'minutes played'})  
     # normalize name teams: from 'team(.1)' to 'team'
     table['opponent'] = table['opponent'].str.replace(r'\(\d+\.\)', '').str.strip()
     table['team'] = table['team'].str.replace(r'\(\d+\.\)', '').str.strip()       
@@ -173,6 +209,12 @@ def clean_data(table):
     # convert strings to integers
     table['goals']   = table['goals'].astype(int) 
     table['assists'] = table['assists'].astype(int) 
+
+    # convert the "date" column as a datetime type for proper sorting
+    table['date'] = pd.to_datetime(table['date'])
+
+    # sorting by the "date" column
+    table = table.sort_values(by='date')
     
     return table  
 
@@ -207,7 +249,7 @@ def get_match_result(row):
     except: None         
 
 
-def save_player_stats(player, df):
+def save_general_stats(player, df):
     # get the authentication token
     token = get_auth_token()
     # set headers to indicate JSON content and include the authentication token
@@ -241,8 +283,47 @@ def save_player_stats(player, df):
         else:
             print(f"Failed to add data for player {player['id']}, team {index[1]}, competition {index[0]}, season {index[2]} {response_post.json()}")
 
+def save_stats_by_position(player, df):
+    # get the authentication token
+    token = get_auth_token()
+    # set headers to indicate JSON content and include the authentication token
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
-PLAYER_STATS=[{"id": 1, "name":"Lionel Messi", "url":'https://www.transfermarkt.com/lionel-messi/leistungsdaten/spieler/28003/plus/'},{"id": 2, "name":"Kylian Mbappe", "url":'https://www.transfermarkt.com/kylian-mbappe/leistungsdaten/spieler/342229/plus/'},{"id": 3, "name":"Erling Haaland", "url":'https://www.transfermarkt.com/erling-haaland/leistungsdaten/spieler/418560/plus/'},{"id": 4, "name":"Vinicius Junior", "url":'https://www.transfermarkt.com/vinicius-junior/leistungsdaten/spieler/371998/plus/'},{"id": 5, "name":"Robert Lewandowski", "url":'https://www.transfermarkt.com/robert-lewandowski/leistungsdaten/spieler/38253/plus/'},{"id": 6, "name":"Kevin De Bruyne", "url":'https://www.transfermarkt.com/kevin-de-bruyne/leistungsdaten/spieler/88755/plus/'},{"id": 7, "name":"Neymar", "url":'https://www.transfermarkt.com/neymar/leistungsdaten/spieler/68290/plus/'},{"id": 8, "name":"Harry Kane", "url":'https://www.transfermarkt.com/harry-kane/leistungsdaten/spieler/132098/plus/'},{"id": 9, "name":"Victor Osimhen", "url":'https://www.transfermarkt.com/victor-osimhen/leistungsdaten/spieler/401923/plus/'},{"id": 10, "name":"Lautaro Martinez", "url":'https://www.transfermarkt.com/lautaro-martinez/leistungsdaten/spieler/406625/plus/'},{"id": 11, "name":"Antoine Griezmann", "url":'https://www.transfermarkt.com/antoine-griezmann/leistungsdaten/spieler/125781/plus/'}]
+    for record in df.to_dict('records'):        
+        data = {
+            "player": record['player'], 
+            "position": record['Played as...'],
+            "games": record['games'],  
+            "goals": record['goals'],
+            "assists": record['assists'],              
+            "season": record["season"],        
+        } 
+        
+        # Convert data to JSON format
+        data_json = json.dumps(data)
+        # Make a POST request to add new data
+        response_post = requests.post(API_STATS_BY_POSITION_URL, data=data_json, headers=headers)
+
+        # Check the response status code for the POST request
+        if response_post.status_code == 201:
+            print(f"Data added successfully for player: {record['player']} - position: {record['Played as...']} - season: {record['season']}")        
+        else:
+            print(f"Failed to add data for player: {record['player']} - position: {record['Played as...']} - season: {record['season']}")
+    
+
+PLAYER_STATS=[
+    {"id": 1, "name":"Lionel Messi", "url":'https://www.transfermarkt.com/lionel-messi/leistungsdaten/spieler/28003/plus/'},
+    {"id": 2, "name":"Kylian Mbappe", "url":'https://www.transfermarkt.com/kylian-mbappe/leistungsdaten/spieler/342229/plus/'},
+    {"id": 3, "name":"Erling Haaland", "url":'https://www.transfermarkt.com/erling-haaland/leistungsdaten/spieler/418560/plus/'},
+    {"id": 4, "name":"Vinicius Junior", "url":'https://www.transfermarkt.com/vinicius-junior/leistungsdaten/spieler/371998/plus/'},
+    {"id": 5, "name":"Robert Lewandowski", "url":'https://www.transfermarkt.com/robert-lewandowski/leistungsdaten/spieler/38253/plus/'},
+    {"id": 6, "name":"Kevin De Bruyne", "url":'https://www.transfermarkt.com/kevin-de-bruyne/leistungsdaten/spieler/88755/plus/'},
+    {"id": 7, "name":"Neymar", "url":'https://www.transfermarkt.com/neymar/leistungsdaten/spieler/68290/plus/'},
+    {"id": 8, "name":"Harry Kane", "url":'https://www.transfermarkt.com/harry-kane/leistungsdaten/spieler/132098/plus/'},
+    {"id": 9, "name":"Victor Osimhen", "url":'https://www.transfermarkt.com/victor-osimhen/leistungsdaten/spieler/401923/plus/'},
+    {"id": 10, "name":"Lautaro Martinez", "url":'https://www.transfermarkt.com/lautaro-martinez/leistungsdaten/spieler/406625/plus/'},
+    {"id": 11, "name":"Antoine Griezmann", "url":'https://www.transfermarkt.com/antoine-griezmann/leistungsdaten/spieler/125781/plus/'}
+    ]
 
 
 if __name__ == "__main__":
