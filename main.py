@@ -44,14 +44,13 @@ def config_scraper(url):
     soup = BeautifulSoup(res.content, 'html.parser')
     return soup
 
-
 def get_player_stats(player, update=False):
     """
     Get player statistics and call the web_scraping function.
     """
     soup = config_scraper(player["url"])
     
-    # scraper_player_data(player,soup)
+    scraper_player_data(player,soup)
 
     if update: 
         # Get information for the current season
@@ -127,7 +126,7 @@ def scraper_general_stats(player, year, season):
         # Process each statistics table
         for stat in stats:
             table = pd.read_html(str(stat))[0]
-            table['competition'] = competition
+            table['competition'] = competition            
             table['team'] = team
             table['season'] = season            
             table = clean_general_stats(table)             
@@ -141,13 +140,143 @@ def scraper_general_stats(player, year, season):
         df['victory'] = df.apply(lambda row: 1 if get_match_result(row) == 'victory' else 0, axis=1)
         df['draw'] = df.apply(lambda row: 1 if get_match_result(row) == 'draw' else 0, axis=1)
         df['defeat'] = df.apply(lambda row: 1 if get_match_result(row) == 'defeat' else 0, axis=1)
-        
+        df['team goals'] = df.apply(lambda row: get_team_goals(row), axis=1)
+                
         # Calculate general statistics and display the result
         general_stats = df.groupby(['competition', 'team', 'season']).sum()
         games = df.groupby(['competition', 'team', 'season']).count().reset_index()['result']
-        general_stats['games'] = games.tolist()   
+        general_stats['games'] = games.tolist()  
 
         save_general_stats(player,general_stats)
+
+def clean_general_stats(table):    
+    """
+    Perform cleaning and transformations on the statistics DataFrame.
+    """    
+    # delete the row 'total'
+    table = table[table['Date'].str.contains('Squad') == False ] 
+    # Drop unnecessary columns
+    columns_to_drop = ['Matchday','For','For.1', 'Opponent','Unnamed: 11','Unnamed: 12','Unnamed: 13','Unnamed: 15','Unnamed: 16','Unnamed: 17']
+    table = table.drop(columns=columns_to_drop, errors='ignore')
+    # rename columns        
+    table = table.rename(columns={'Date':'date','Venue':'venue','Opponent.1':'opponent','Result':'result','Unnamed: 9':'goals','Unnamed: 10':'assists','Unnamed: 14':'minutes played'})  
+    # normalize name teams: from 'team(.1)' to 'team'
+    table['opponent'] = table['opponent'].str.replace(r'\(\d+\.\)', '').str.strip()
+    table['team'] = table['team'].str.replace(r'\(\d+\.\)', '').str.strip()       
+    # replace NaN values with zeros
+    table['goals'], table['assists'] = table['goals'].fillna(0), table['assists'].fillna(0) 
+    # remove matches he has not played
+    table = table.drop(table[table['goals'].astype(str).str.match('.*[a-zA-Z].*')].index)      
+    table['minutes played'] = table['minutes played'].str.replace("'", '').astype(int)    
+    # reformat the dates in the 'season' column
+    table['season'] = table['season'].str.replace(r'(\d{2})/(\d{2})', r'20\1-20\2')
+    # convert strings to integers
+    table['goals']   = table['goals'].astype(int) 
+    table['assists'] = table['assists'].astype(int) 
+
+    # convert the "date" column as a datetime type for proper sorting
+    table['date'] = pd.to_datetime(table['date'])
+
+    # sorting by the "date" column
+    table = table.sort_values(by='date')       
+    
+    return table  
+
+def get_match_result(row):
+    """
+    Determine the match result (victory, draw, or defeat) for a given row.
+    """
+    # Function to determine victory, draw, or defeat
+    venue = row.get('venue', '')  # Use get to handle the case where 'venue' is not present
+    result = row.get('result', '')        
+    try:               
+        if 'on pens' in result or 'AET' in result: 
+            team_goals = 0
+            return 'draw', team_goals        
+        elif venue == "H": # the team that the player belongs to played at their home  
+
+            home_goals, away_goals = map(int, result.split(':'))  
+
+            team_goals = home_goals                              
+
+            if home_goals > away_goals:    return 'victory'
+            elif home_goals == away_goals: return 'draw'
+            else: return 'defeat', team_goals
+
+        elif venue == "A": # the player's team played as an away team. 
+            
+            home_goals, away_goals = map(int, result.split(':')) 
+
+            team_goals = away_goals
+            
+            if away_goals > home_goals:    return 'victory'
+            elif away_goals == home_goals: return 'draw'
+            else: return 'defeat' , team_goals
+            
+        else: return None
+        
+    except: None    
+
+def get_team_goals(row):
+    """
+    Determine how much goals the player team scored in the match.
+    """
+    # Function to determine victory, draw, or defeat
+    venue = row.get('venue', '')  # Use get to handle the case where 'venue' is not present
+    result = row.get('result', '')        
+    try:               
+        if 'on pens' in result or 'AET' in result:  return 0       
+        elif venue == "H": # the team that the player belongs to played at their home  
+
+            home_goals, away_goals = map(int, result.split(':')) 
+
+            return home_goals 
+
+        elif venue == "A": # the player's team played as an away team. 
+            
+            home_goals, away_goals = map(int, result.split(':')) 
+
+            return away_goals
+            
+        else: return 0
+        
+    except: None             
+
+def save_general_stats(player, df):
+    # get the authentication token
+    token = get_auth_token()
+    # set headers to indicate JSON content and include the authentication token
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+    for record, index in zip(df.to_dict('records'), df.index.to_list()):
+        # Prepare data for the POST request
+        data = {
+            "player": player['id'],
+            "team": index[1],
+            "competition": index[0],
+            "season": index[2],
+            "goals": record['goals'],
+            "assists": record['assists'],
+            "games": record['games'],
+            "wins": record['victory'],
+            "draws": record['draw'],
+            "defeats": record['defeat'],
+            "team_goals": record['team goals'],
+            "minutes_played": record['minutes played'],
+        }
+
+        # Convert data to JSON format
+        data_json = json.dumps(data)
+        # Make a POST request to add new data
+        response_post = requests.post(API_PLAYER_STATS_URL, data=data_json, headers=headers)
+
+        # Check the response status code for the POST request
+        if response_post.status_code == 201:
+            print(f"Data added successfully for player {player['id']}, team {index[1]}, competition {index[0]}, season {index[2]}")        
+        else:
+            print(f"Failed to add data for player {player['id']}, team {index[1]}, competition {index[0]}, season {index[2]} {response_post.json()}")
+
+
 
 def scraper_stats_by_position(soup, player, year, season):
     url  = f"{player['url']}?saison={year}"
@@ -182,106 +311,8 @@ def scraper_stats_by_position(soup, player, year, season):
         # reformat the dates in the 'season' column
         df['season'] = df['season'].str.replace(r'(\d{2})/(\d{2})', r'20\1-20\2')
 
-        save_stats_by_position(player, df)
-       
+        save_stats_by_position(player, df)      
 
-def clean_general_stats(table):    
-    """
-    Perform cleaning and transformations on the statistics DataFrame.
-    """    
-    # delete the row 'total'
-    table = table[table['Date'].str.contains('Squad') == False ] 
-    # Drop unnecessary columns
-    columns_to_drop = ['Matchday','For','For.1', 'Opponent','Unnamed: 11','Unnamed: 12','Unnamed: 13','Unnamed: 15','Unnamed: 16','Unnamed: 17']
-    table = table.drop(columns=columns_to_drop, errors='ignore')
-    # rename columns        
-    table = table.rename(columns={'Date':'date','Venue':'venue','Opponent.1':'opponent','Result':'result','Unnamed: 9':'goals','Unnamed: 10':'assists','Unnamed: 14':'minutes played'})  
-    # normalize name teams: from 'team(.1)' to 'team'
-    table['opponent'] = table['opponent'].str.replace(r'\(\d+\.\)', '').str.strip()
-    table['team'] = table['team'].str.replace(r'\(\d+\.\)', '').str.strip()       
-    # replace NaN values with zeros
-    table['goals'], table['assists'] = table['goals'].fillna(0), table['assists'].fillna(0) 
-    # remove matches he has not played
-    table = table.drop(table[table['goals'].astype(str).str.match('.*[a-zA-Z].*')].index)      
-    table['minutes played'] = table['minutes played'].str.replace("'", '').astype(int)    
-    # reformat the dates in the 'season' column
-    table['season'] = table['season'].str.replace(r'(\d{2})/(\d{2})', r'20\1-20\2')
-    # convert strings to integers
-    table['goals']   = table['goals'].astype(int) 
-    table['assists'] = table['assists'].astype(int) 
-
-    # convert the "date" column as a datetime type for proper sorting
-    table['date'] = pd.to_datetime(table['date'])
-
-    # sorting by the "date" column
-    table = table.sort_values(by='date')
-    
-    return table  
-
-def get_match_result(row):
-    """
-    Determine the match result (victory, draw, or defeat) for a given row.
-    """
-    # Function to determine victory, draw, or defeat
-    venue  = row['venue']    
-    result = row['result']
-        
-    try:               
-        if 'on pens' in result or 'AET' in result: return 'draw'        
-        elif venue == "H": # the team that the player belongs to played at their home  
-
-            home_goals, away_goals = map(int, result.split(':'))  
-
-            if home_goals > away_goals:    return 'victory'
-            elif home_goals == away_goals: return 'draw'
-            else: return 'defeat'
-
-        elif venue == "A": # the player's team played as an away team. 
-            
-            home_goals, away_goals = map(int, result.split(':')) 
-            
-            if away_goals > home_goals:    return 'victory'
-            elif away_goals == home_goals: return 'draw'
-            else: return 'defeat' 
-            
-        else: return None
-        
-    except: None         
-
-
-def save_general_stats(player, df):
-    # get the authentication token
-    token = get_auth_token()
-    # set headers to indicate JSON content and include the authentication token
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
-
-    for record, index in zip(df.to_dict('records'), df.index.to_list()):
-        # Prepare data for the POST request
-        data = {
-            "player": player['id'],
-            "team": index[1],
-            "competition": index[0],
-            "season": index[2],
-            "goals": record['goals'],
-            "assists": record['assists'],
-            "games": record['games'],
-            "wins": record['victory'],
-            "draws": record['draw'],
-            "defeats": record['defeat'],
-            "team_goals": 0,
-            "minutes_played": record['minutes played'],
-        }
-
-        # Convert data to JSON format
-        data_json = json.dumps(data)
-        # Make a POST request to add new data
-        response_post = requests.post(API_PLAYER_STATS_URL, data=data_json, headers=headers)
-
-        # Check the response status code for the POST request
-        if response_post.status_code == 201:
-            print(f"Data added successfully for player {player['id']}, team {index[1]}, competition {index[0]}, season {index[2]}")        
-        else:
-            print(f"Failed to add data for player {player['id']}, team {index[1]}, competition {index[0]}, season {index[2]} {response_post.json()}")
 
 def save_stats_by_position(player, df):
     # get the authentication token
@@ -311,6 +342,7 @@ def save_stats_by_position(player, df):
             print(f"Failed to add data for player: {record['player']} - position: {record['Played as...']} - season: {record['season']}")
     
 
+
 PLAYER_STATS=[
     {"id": 1, "name":"Lionel Messi", "url":'https://www.transfermarkt.com/lionel-messi/leistungsdaten/spieler/28003/plus/'},
     {"id": 2, "name":"Kylian Mbappe", "url":'https://www.transfermarkt.com/kylian-mbappe/leistungsdaten/spieler/342229/plus/'},
@@ -328,5 +360,7 @@ PLAYER_STATS=[
 
 if __name__ == "__main__":
     
-    for player in PLAYER_STATS: get_player_stats(player,update=True)  
+    for player in PLAYER_STATS: get_player_stats(player,update=False) 
+
+   
 
