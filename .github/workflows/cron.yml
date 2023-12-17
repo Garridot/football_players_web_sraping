@@ -30,6 +30,7 @@ jobs:
       env:        
           API_AUTH_URL         : ${{ secrets.API_AUTH_URL }}  
           API_PLAYER_STATS_URL : ${{ secrets.API_PLAYER_STATS_URL }}
+          API_STATS_BY_POSITION_URL : ${{secrets.API_STATS_BY_POSITION_URL}}
           API_PLAYERS_URL      : ${{ secrets.API_PLAYERS_URL }} 
           EMAIL                : ${{ secrets.EMAIL }}
           PASSWORD             : ${{ secrets.PASSWORD }} 
