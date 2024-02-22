@@ -6,6 +6,8 @@ import json
 import re
 import os
 
+from datetime import datetime
+
 load_dotenv() # take environment variables from .env.
 
 API_AUTH_URL         = os.getenv('API_AUTH_URL')     # API endpoint for authentication
@@ -67,43 +69,66 @@ def get_player_stats(player, update=False):
             scraper_stats_by_position(soup, player, year, season)
             
             
-def scraper_player_data(player,soup): 
-    URL = f'{API_PLAYERS_URL}{player["id"]}/'       
+def scraper_player_data(player,soup):
+
+    # Get Player Details
+    player_details = soup.find('div',class_='data-header__details').find_all('ul',class_='data-header__items')
+    # Get the date_of_birth and current age 
+    date_of_birth  = player_details[0].find_all('li',class_='data-header__label')[0].find('span',class_='data-header__content').text
+    # Get Player Position
+    position = player_details[1].find_all('li',class_='data-header__label')[1].find('span',class_='data-header__content').text    
+    # Get Player nationality
+    nationality = player_details[2].find_all('li',class_='data-header__label')[0].find('span',class_='data-header__content').text
+    # Get the current club 
+    current_club = soup.find('span',class_='data-header__club').text   
+
+    ### CLEAN DATA  
+       
+    # Remove white spacess
+    date_of_birth = date_of_birth.strip()   
+    position      = position.strip()
+    nationality   = nationality.strip()  
+    current_club  = current_club.strip() 
+    # Get the current age; Use a regular expression to extract the number within parentheses   
+    age  = re.search(r'\((\d+)\)', date_of_birth).group(1) 
+    # Get birth; Remove unnecessary string content to convert to a datetime object
+    birth = date_of_birth[0:-5] 
+    # Convert the string to a datetime object
+    date_object = datetime.strptime(birth, "%b %d, %Y")
+    # Format the datetime object as a string in "YYYY-MM-DD" format
+    formatted_birth = date_object.strftime("%Y-%m-%d")        
     
-    response_get = requests.get(URL, {"Content-Type": "application/json"}).json()    
-    
-    # get the current age 
-    age  = soup.find('li',class_='data-header__label').find('span',class_='data-header__content').text
-    # remove white spaces
-    age  = age.strip()
-    # use a regular expression to extract the number within parentheses
-    age  = re.search(r'\((\d+)\)', age).group(1)
-    # get the current club 
-    current_club = soup.find('span',class_='data-header__club').text
-    
-    # player data to be sent in JSON format
+    # Player data to be sent in JSON format
     data  = {
-        "name":response_get["name"], 
-        "age": age,
-        'date_of_birth': response_get["date_of_birth"], 
-        'nationality': response_get["nationality"], 
-        'position': response_get["position"],
-        "current_club" : current_club,
+        "name"          :player["name"], 
+        "age"           : age,      
+        "current_club"  : current_club,     
+        'date_of_birth' : formatted_birth, 
+        'nationality'   : nationality,
+        'position'      : position         
     } 
         
-    # get the authentication token
+    # Get the authentication token
     token = get_auth_token()
-    # convert data to JSON format
+    # Convert data to JSON format
     data_json = json.dumps(data)
-    # set headers to indicate JSON content and include the authentication token
-    headers = { "Content-Type": "application/json", "Authorization": f"Bearer {token}"}    
-    # Make a POST request to add new data
-    response_put = requests.put(URL, data=data_json, headers=headers)
-    
-    if response_put.status_code == 200: 
-        print(f"Data updated successfully for player: {response_put.json()}")
-    else:
-        print(f"Failed to update data for player: {response_put.json()}") ,
+    # Set headers to indicate JSON content and include the authentication token
+    headers = { "Content-Type": "application/json", "Authorization": f"Bearer {token}"} 
+
+    URL = f'{API_PLAYERS_URL}{player["id"]}/'           
+    response_get = requests.get(URL, {"Content-Type": "application/json"})     
+
+    if response_get.status_code == 200:
+        # Make a PUT request to add new data
+        response_put = requests.put(URL, data=data_json, headers=headers)        
+        if response_put.status_code == 200: print(f"Data updated successfully for player: {response_put.json()}")
+        else: print(f"Failed to update data for player: {response_put.json()}")
+    else:     
+        # Make a POST request to add new data
+        response_put = requests.post(API_PLAYERS_URL, data=data_json, headers=headers)        
+        if response_put.status_code == 201: print(f"Data added successfully for player: {response_put.json()}")
+        else: print(f"Failed to add data for player: {response_put.json()}")
+
                 
 def scraper_general_stats(player, year, season):
     """
@@ -359,7 +384,6 @@ PLAYER_STATS=[
 
 
 if __name__ == "__main__":
-    
     for player in PLAYER_STATS: get_player_stats(player,update=False) 
 
    
