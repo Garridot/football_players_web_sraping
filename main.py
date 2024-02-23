@@ -57,14 +57,14 @@ def get_player_stats(player, update=False):
     if update: 
         # Get information for the current season
         year   = soup.find('select').find_all('option')[1].get('value')
-        season = soup.find('select').find_all('option')[1].text
+        season = soup.find('select').find_all('option')[1].text        
         scraper_general_stats(player, year, season)
         scraper_stats_by_position(soup, player, year, season)
     else:  
-        # Get information for all seasons
-        lists = soup.find('select').find_all('option')[1:]
-        for item in lists[1:]:
-            year, season = item.get('value'), item.text            
+        # Get information for all seasonss
+        lists = soup.find('select').find_all('option')[1:]           
+        for item in lists:            
+            year, season = item.get('value'), item.text 
             scraper_general_stats(player, year, season)
             scraper_stats_by_position(soup, player, year, season)
             
@@ -143,7 +143,7 @@ def scraper_general_stats(player, year, season):
     table_stats = soup.find('div',class_='large-8 columns').find_all('div',class_='box')       
     
     for box in table_stats[2:]:
-        competition = box.find('div',class_='table-header img-vat').find('a').text.strip() 
+        competition = box.find('div').find('a').text.strip() 
         # get on which team the player plays 
         team   = box.find_all('td',class_='zentriert')[3].find('a').get('title')            
         stats  = box.find_all('table')
@@ -384,7 +384,7 @@ PLAYER_STATS=[
 
 
 if __name__ == "__main__":
-    for player in PLAYER_STATS: get_player_stats(player,update=False) 
+    for player in PLAYER_STATS: get_player_stats(player,update=True) 
 
    
 
