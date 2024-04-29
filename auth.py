@@ -3,7 +3,7 @@ import json
 
 from config import *
 
-def get_auth_token(): 
+async def get_auth_token(): 
     # data to be sent in JSON format
     data_to_send = { "email": EMAIL, "password": PASSWORD}
     # convert data to JSON format

@@ -1,4 +1,6 @@
 import pandas as pd 
+import re
+import datetime
 
 def clean_general_stats(table):    
     """
@@ -113,4 +115,21 @@ def clean_stats_by_position(df):
 
     return df
 
-  
+def clean_personal_data(player,data):
+    # Remove white spacess
+    data["date_of_birth"] = data["date_of_birth"].strip()   
+    data["position"]      = data["position"].strip()
+    data["nationality"]   = data["nationality"].strip()  
+    data["current_club"]  = data["current_club"].strip()
+
+    
+    age  = re.search(r'\((\d+)\)', data["date_of_birth"]).group(1) # # get the current age; use a regular expression to extract the number within parentheses.  
+
+    birth = data["date_of_birth"][0:-5] # get the birth; remove unnecessary string content to convert to a datetime object.     
+    date_object = datetime.strptime(birth, "%b %d, %Y") # convert the string to a datetime object.    
+    formatted_birth = date_object.strftime("%Y-%m-%d") # format the datetime object as a string in "YYYY-MM-DD" format. 
+    
+    data["age"] = age # add new element in the dict.
+    data["date_of_birth"] = formatted_birth # update with a correct date format the element "date_of_birth".  
+
+    return data      
