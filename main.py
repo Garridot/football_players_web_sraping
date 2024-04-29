@@ -3,11 +3,13 @@ import pandas as pd
 import requests
 import json
 
+
 from config import *
 from data_processing import *
 from auth import get_auth_token
 from players_url import PLAYERS_URL
 
+token = get_auth_token()
   
 def setup_scraping(url): 
     """
@@ -23,14 +25,14 @@ def scraper_stats(player, update=False):
     """
     soup = setup_scraping(player["url"])
     
-    # get_player_personal_data(player,soup)
+    get_player_personal_data(player,soup)
 
     if update: 
         # if the option "update" was chosen, get information for the current season
         year   = soup.find('select').find_all('option')[1].get('value') 
         season = soup.find('select').find_all('option')[1].text         
         get_stats(player, year, season)
-#         get_stats_by_position(soup, player, year, season)
+        get_stats_by_position(soup, player, year, season)
     else:  
         # get information for all seasons
         lists = soup.find('select').find_all('option')[1:]           
@@ -42,46 +44,25 @@ def scraper_stats(player, update=False):
            
 def get_player_personal_data(player,soup):
 
-    data = []
-
     # Get Player Details
-    player_details = soup.find('div',class_='data-header__details').find_all('ul',class_='data-header__items')    
+    player_details = soup.find('div',class_='data-header__details').find_all('ul',class_='data-header__items')  
+
+    data = {}  
     
-    data["player"]        = player["name"] 
+    data["name"]          = player["name"] 
     data["date_of_birth"] = player_details[0].find_all('li',class_='data-header__label')[0].find('span',class_='data-header__content').text
     data["position"]      = player_details[1].find_all('li',class_='data-header__label')[1].find('span',class_='data-header__content').text  
     data["nationality"]   = player_details[2].find_all('li',class_='data-header__label')[0].find('span',class_='data-header__content').text    
     data["current_club"]  = soup.find('span',class_='data-header__club').text  
 
+    
+
     data = clean_personal_data(player,data)
     # Convert the DataFrame into JSON format
     data_json = json.dumps(data)
 
-    save_personal_data(data_json)
-def save_personal_data(data_json):
+    save_personal_data(player,data_json)
 
-    # set headers to indicate JSON content and include the authentication token
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
-        
-    
-    URL = f'{API_PLAYERS_URL}{player["id"]}/'           
-    response_get = requests.get(URL, {"Content-Type": "application/json"})     
-
-    if response_get.status_code == 200:
-        # If the response returns a status "200", the player exists. Make a PUT request to update 
-        response_put = requests.put(URL, data=data_json, headers=headers)   
-
-        if response_put.status_code == 200: print(f"Data updated successfully for player: {response_put.json()}")
-        else: print(f"Failed to update data for player: {response_put.json()}")
-
-    else:     
-        # If the response does not return the status "200", the player doesn't exist. Make a POST request to add the new player and their data
-        response_put = requests.post(API_PLAYERS_URL, data=data_json, headers=headers) 
-
-        if response_put.status_code == 201: print(f"Data added successfully for player: {response_put.json()}")
-        else: print(f"Failed to add data for player: {response_put.json()}")
-
- 
 def get_stats(player, year, season):
     """
     Make the extraction of statistics 
@@ -140,7 +121,7 @@ def get_general_stats(df):
     data_list = [] 
 
     for record, index in zip(general_stats.to_dict('records'), general_stats.index.to_list()):
-        # Prepare data for the POST request
+        
         data = {
             "player": player['id'],
             "team": index[1],
@@ -158,10 +139,7 @@ def get_general_stats(df):
 
         data_list.append(data)
 
-    # Convert the DataFrame into JSON format
-    data_json = json.dumps(data_list)
-
-    save_stats_data(API_PLAYER_STATS_URL,data_json)    
+    save_stats_data(API_PLAYER_STATS_URL,data_list)    
 
 def get_stats_by_position(soup, player, year, season):
     url  = f"{player['url']}?saison={year}"
@@ -177,11 +155,13 @@ def get_stats_by_position(soup, player, year, season):
 
     if df is not None: 
 
-        df = clean_stats_by_position(df)  
-
         # Add columns in the dataframe
         df["player"] = player["id"]
         df["season"] = season
+
+        df = clean_stats_by_position(df)
+
+        data_list = []
 
         for record in df.to_dict('records'):        
             data = {
@@ -192,24 +172,48 @@ def get_stats_by_position(soup, player, year, season):
                 "assists": record['assists'],              
                 "season": record["season"],        
             } 
-            
-        # Convert data to JSON format
-        data_json = json.dumps(data) 
 
-        save_stats_data(API_STATS_BY_POSITION_URL,data_json)    
-def save_stats_data(URL,data_json):     
+            data_list.append(data)
+
+    save_stats_data(API_STATS_BY_POSITION_URL,data_list)    
+
+def save_stats_data(URL,data_list): 
 
     # set headers to indicate JSON content and include the authentication token
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}    
 
-    response_post = requests.post(URL, data=data_json, headers=headers)
+    for data in data_list:
+        # Convert the DataFrame into JSON format
+        data_json = json.dumps(data) 
+        response_post = requests.post(URL, data=data_json, headers=headers)
+        # Check the response status code for the POST request
+        if response_post.status_code == 201:  print(f"Data added successfully: {response_post.json()}")        
+        else: print(f"Failed to add data: {response_post.json()}")  
 
-    # Check the response status code for the POST request
-    if response_post.status_code == 201:
-        print(f"Data added successfully: {response_post.json()}")        
-    else:
-        print(f"Failed to add data: {response_post.json()}")  
+def save_personal_data(player,data_json):
 
+    # set headers to indicate JSON content and include the authentication token
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+        
+    
+    URL = f'{API_PLAYERS_URL}{player["id"]}/'           
+    response_get = requests.get(URL, {"Content-Type": "application/json"})     
+
+    if response_get.status_code == 200:
+        # If the response returns a status "200", the player exists. Make a PUT request to update 
+        response_put = requests.put(URL, data=data_json, headers=headers)   
+
+        if response_put.status_code == 200: print(f"Data updated successfully for player: {response_put.json()}")
+        else: print(f"Failed to update data for player: {response_put.json()}")
+
+    else:     
+        # If the response does not return the status "200", the player doesn't exist. Make a POST request to add the new player and their data
+        response_put = requests.post(API_PLAYERS_URL, data=data_json, headers=headers) 
+
+        if response_put.status_code == 201: print(f"Data added successfully for player: {response_put.json()}")
+        else: print(f"Failed to add data for player: {response_put.json()}")
+
+ 
 if __name__ == "__main__":
     for player in PLAYERS_URL: scraper_stats(player,update=True) 
 

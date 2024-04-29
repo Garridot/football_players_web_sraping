@@ -126,7 +126,7 @@ def clean_personal_data(player,data):
     age  = re.search(r'\((\d+)\)', data["date_of_birth"]).group(1) # # get the current age; use a regular expression to extract the number within parentheses.  
 
     birth = data["date_of_birth"][0:-5] # get the birth; remove unnecessary string content to convert to a datetime object.     
-    date_object = datetime.strptime(birth, "%b %d, %Y") # convert the string to a datetime object.    
+    date_object = datetime.datetime.strptime(birth, "%b %d, %Y") # convert the string to a datetime object.    
     formatted_birth = date_object.strftime("%Y-%m-%d") # format the datetime object as a string in "YYYY-MM-DD" format. 
     
     data["age"] = age # add new element in the dict.
