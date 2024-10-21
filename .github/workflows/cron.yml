@@ -16,6 +16,10 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: 3.8.x
+
+    
+    - name: Send Request to Keep Awake
+      run: curl -s -I https://football-player-charts-stats-api.onrender.com/    
         
     - name: Install python3-distutils
       run: pip install disutils
@@ -24,7 +28,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt 
-        pip install lxml
 
     - name: Run script
       env:        

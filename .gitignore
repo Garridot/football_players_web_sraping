@@ -1,7 +1,5 @@
-# .gitignore
-
 # Virtual environment
-env/
+venv/
 
 # Compiled Python files
 __pycache__/
@@ -26,3 +24,6 @@ __pycache__/
 # IDE-specific files (e.g., PyCharm)
 .idea/
 *.iml
+
+# SQLITE
+*.db 

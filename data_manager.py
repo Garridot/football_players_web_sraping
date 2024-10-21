@@ -17,14 +17,18 @@ def clean_general_stats(table):
     )  
     # normalize name teams: from 'team(.1)' to 'team'
     table['opponent'] = table['opponent'].str.replace(r'\(\d+\.\)', '').str.strip()
-    table['team'] = table['team'].str.replace(r'\(\d+\.\)', '').str.strip()       
+    table['team'] = table['team'].str.replace(r'\(\d+\.\)', '').str.strip()   
+
     # replace NaN values with zeros
     table['goals'], table['assists'] = table['goals'].fillna(0), table['assists'].fillna(0) 
+
     # remove matches he has not played
     table = table.drop(table[table['goals'].astype(str).str.match('.*[a-zA-Z].*')].index)      
     table['minutes played'] = table['minutes played'].str.replace("'", '').astype(int)    
+
     # reformat the dates in the 'season' column: from "23/24" to "2023-2024" 
     table['season'] = table['season'].str.replace(r'(\d{2})/(\d{2})', r'20\1-20\2')
+    
     # convert strings numbers to integers
     table['goals']   = table['goals'].astype(int) 
     table['assists'] = table['assists'].astype(int) 
@@ -133,3 +137,10 @@ def clean_personal_data(player,data):
     data["date_of_birth"] = formatted_birth # update with a correct date format the element "date_of_birth".  
 
     return data      
+
+
+def expand_year_range(year_range):
+    start_year, end_year = year_range.split('/')
+    start_year = '20' + start_year if int(start_year) < 50 else '19' + start_year
+    end_year = '20' + end_year if int(end_year) < 50 else '19' + end_year
+    return f"{start_year}-{end_year}"    

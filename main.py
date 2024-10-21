@@ -5,7 +5,7 @@ import json
 
 
 from config import *
-from data_processing import *
+from data_manager import *
 from auth import get_auth_token
 from players_url import PLAYERS_URL
 
@@ -139,7 +139,7 @@ def get_general_stats(df):
 
         data_list.append(data)
 
-    save_stats_data(API_PLAYER_STATS_URL,data_list)    
+    save_stats_data(API_PLAYER_STATS_URL,data_list) 
 
 def get_stats_by_position(soup, player, year, season):
     url  = f"{player['url']}?saison={year}"
@@ -174,6 +174,18 @@ def get_stats_by_position(soup, player, year, season):
             } 
 
             data_list.append(data)
+    else:
+
+        data_list = [
+            {
+                "player": player["id"], 
+                "position": "data not available",
+                "games": 0,  
+                "goals": 0,
+                "assists": 0,              
+                "season": expand_year_range(season),   
+            }             
+            ]        
 
     save_stats_data(API_STATS_BY_POSITION_URL,data_list)    
 
