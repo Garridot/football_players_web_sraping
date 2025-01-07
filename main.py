@@ -2,12 +2,11 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import requests
 import json
-
-
 from config import *
 from data_manager import *
 from auth import get_auth_token
 from players_url import PLAYERS_URL
+from logger_config import logger
 
 token = get_auth_token()
   
@@ -18,6 +17,7 @@ def setup_scraping(url):
     res  = requests.get(url, headers=HEADERS)
     soup = BeautifulSoup(res.content, 'html.parser')
     return soup
+
 
 def scraper_stats(player, update=False):
     """
@@ -41,7 +41,8 @@ def scraper_stats(player, update=False):
             season = item.text
             get_stats(player, year, season)
             get_stats_by_position(soup, player, year, season) 
-           
+
+
 def get_player_personal_data(player,soup):
 
     # Get Player Details
@@ -55,13 +56,12 @@ def get_player_personal_data(player,soup):
     data["nationality"]   = player_details[2].find_all('li',class_='data-header__label')[0].find('span',class_='data-header__content').text    
     data["current_club"]  = soup.find('span',class_='data-header__club').text  
 
-    
-
     data = clean_personal_data(player,data)
     # Convert the DataFrame into JSON format
     data_json = json.dumps(data)
 
     save_personal_data(player,data_json)
+
 
 def get_stats(player, year, season):
     """
@@ -105,6 +105,8 @@ def get_stats(player, year, season):
         df = pd.concat(dfs, ignore_index=True) 
         
         get_general_stats(df)
+
+
 def get_general_stats(df):                     
 
     # Add additional columns
@@ -140,6 +142,7 @@ def get_general_stats(df):
         data_list.append(data)
 
     save_stats_data(API_PLAYER_STATS_URL,data_list) 
+
 
 def get_stats_by_position(soup, player, year, season):
     url  = f"{player['url']}?saison={year}"
@@ -189,6 +192,7 @@ def get_stats_by_position(soup, player, year, season):
 
     save_stats_data(API_STATS_BY_POSITION_URL,data_list)    
 
+
 def save_stats_data(URL,data_list): 
 
     # set headers to indicate JSON content and include the authentication token
@@ -199,8 +203,11 @@ def save_stats_data(URL,data_list):
         data_json = json.dumps(data) 
         response_post = requests.post(URL, data=data_json, headers=headers)
         # Check the response status code for the POST request
-        if response_post.status_code == 201:  print(f"Data added successfully: {response_post.json()}")        
-        else: print(f"Failed to add data: {response_post.json()}")  
+        if response_post.status_code == 201:  
+            logger.info(f"Data added successfully: {response_post.json()}")        
+        else: 
+            logger.error(f"Failed to add data: {response_post.json()}")  
+
 
 def save_personal_data(player,data_json):
 
@@ -215,15 +222,19 @@ def save_personal_data(player,data_json):
         # If the response returns a status "200", the player exists. Make a PUT request to update 
         response_put = requests.put(URL, data=data_json, headers=headers)   
 
-        if response_put.status_code == 200: print(f"Data updated successfully for player: {response_put.json()}")
-        else: print(f"Failed to update data for player: {response_put.json()}")
+        if response_put.status_code == 200: 
+            logger.info(f"Data updated successfully for player: {response_put.json()}")
+        else: 
+            logger.error(f"Failed to update data for player: {response_put.json()}")
 
     else:     
         # If the response does not return the status "200", the player doesn't exist. Make a POST request to add the new player and their data
         response_put = requests.post(API_PLAYERS_URL, data=data_json, headers=headers) 
 
-        if response_put.status_code == 201: print(f"Data added successfully for player: {response_put.json()}")
-        else: print(f"Failed to add data for player: {response_put.json()}")
+        if response_put.status_code == 201: 
+            logger.info(f"Data added successfully for player: {response_put.json()}")
+        else: 
+            logger.error(f"Failed to add data for player: {response_put.json()}")
 
  
 if __name__ == "__main__":
