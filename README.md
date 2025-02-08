@@ -24,7 +24,6 @@ The main.py script extracts data from various football players and updates the s
 
 ```
 pip install -r requirements.txt
-pip install lxml
 ```
 Then, execute the script:
 ```

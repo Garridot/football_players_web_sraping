@@ -20,9 +20,6 @@ jobs:
     
     - name: Send Request to Keep Awake
       run: curl -s -I https://football-player-charts-stats-api.onrender.com/    
-        
-    - name: Install python3-distutils
-      run: pip install disutils
 
     - name: Install dependencies
       run: |
