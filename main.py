@@ -15,7 +15,13 @@ def setup_scraping(url):
     Set up and make the HTTP request and return the BeautifulSoup object.
     """
     res  = requests.get(url, headers=HEADERS)
+    if res.status_code != 200:
+        logger.error(f"Error accessing {url}. Code: {res.status_code}")
+        return None  
     soup = BeautifulSoup(res.content, 'html.parser')
+    if not soup:
+        logger.error("Error getting the HTML.")
+        return
     return soup
 
 
@@ -46,7 +52,11 @@ def scraper_stats(player, update=False):
 def get_player_personal_data(player,soup):
 
     # Get Player Details
-    player_details = soup.find('div',class_='data-header__details').find_all('ul',class_='data-header__items')  
+    player_details = soup.find('div',class_='data-header__details').find_all('ul',class_='data-header__items') 
+
+    if not player_details:
+        logger.error(f"No details found for {player['name']}")
+        return 
 
     data = {}  
     
