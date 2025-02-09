@@ -26,6 +26,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt 
 
+    - name: Test Transfermarkt Access
+      run: |
+        curl -s -I -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://www.transfermarkt.com/
+
     - name: Run script
       env:        
           API_AUTH_URL         : ${{ secrets.API_AUTH_URL }}  

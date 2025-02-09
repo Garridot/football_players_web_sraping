@@ -14,15 +14,17 @@ def setup_scraping(url):
     """
     Set up and make the HTTP request and return the BeautifulSoup object.
     """
-    res  = requests.get(url, headers=HEADERS)
-    if res.status_code != 200:
+    for _ in range(3):  # Reintentar hasta 3 veces
+        res = requests.get(url, headers=HEADERS)
+
+        if res.status_code == 200: 
+            soup = BeautifulSoup(res.content, 'html.parser')
+            return soup
+            
+        logger.warning(f"Retrying to access to {url}")
+        time.sleep(5) 
         logger.error(f"Error accessing {url}. Code: {res.status_code}")
-        return None  
-    soup = BeautifulSoup(res.content, 'html.parser')
-    if not soup:
-        logger.error("Error getting the HTML.")
-        return
-    return soup
+        return None    
 
 
 def scraper_stats(player, update=False):
