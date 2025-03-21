@@ -7,6 +7,7 @@ from data_manager import *
 from auth import get_auth_token
 from players_url import PLAYERS_URL
 from logger_config import logger
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 token = get_auth_token()
   
@@ -116,10 +117,10 @@ def get_stats(player, year, season):
         # Concatenate all collected DataFrames
         df = pd.concat(dfs, ignore_index=True) 
         
-        get_general_stats(df)
+        get_general_stats(df,player)
 
 
-def get_general_stats(df):                     
+def get_general_stats(df,player):                     
 
     # Add additional columns
     df['victory'] = df.apply(lambda row: 1 if get_match_result(row) == 'victory' else 0, axis=1)
@@ -202,7 +203,7 @@ def get_stats_by_position(soup, player, year, season):
             }             
             ]        
 
-    save_stats_data(API_STATS_BY_POSITION_URL,data_list)    
+    save_stats_data(API_STATS_BY_POSITION_URL,data_list) 
 
 
 def save_stats_data(URL,data_list): 
@@ -248,9 +249,22 @@ def save_personal_data(player,data_json):
         else: 
             logger.error(f"Failed to add data for player: {response_put.json()}")
 
+def main():
+    with ThreadPoolExecutor(max_workers=11) as executor:  # Ajusta el número de workers según sea necesario
+        # Enviar las tareas al executor
+        future_to_player = {executor.submit(scraper_stats, player, False): player for player in PLAYERS_URL}
+
+        # Recoger los resultados a medida que se completan
+        for future in as_completed(future_to_player):
+            player = future_to_player[future]
+            try:
+                future.result()  # Obtener el resultado (o excepción) de la tarea
+            except Exception as e:
+                logger.error(f"Error processing {player['name']}: {e}")
+
  
 if __name__ == "__main__":
-    for player in PLAYERS_URL: scraper_stats(player,update=True) 
+    main() 
 
 
 

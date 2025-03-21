@@ -17,5 +17,5 @@ def get_auth_token():
         token = response.json()['access'] # Extract and return the access token from the response
         return token
     else:        
-        raise Exception(f"Error en la solicitud POST a la API local. Código de respuesta: {response.status_code}")
+        raise Exception(f"Error in the POST request sent to the API: {response.json()}")
 
