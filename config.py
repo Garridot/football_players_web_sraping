@@ -19,3 +19,11 @@ HEADERS = {
     'DNT': '1'
     }
 
+token = None
+
+def set_token(new_token):
+    global token
+    token = new_token
+
+def get_token():
+    return token
