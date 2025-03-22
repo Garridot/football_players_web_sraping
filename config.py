@@ -9,6 +9,7 @@ API_PLAYERS_URL      = os.getenv('API_PLAYERS_URL')      # API endpoint for play
 API_STATS_BY_POSITION_URL = os.getenv('API_STATS_BY_POSITION_URL' ) # API endpoint for players stats by position
 EMAIL    = os.getenv('EMAIL')
 PASSWORD = os.getenv('PASSWORD')
+CLOUDAMQP_URL = os.getenv("CLOUDAMQP_URL")
 
 # Define headers at the module level to avoid repetition
 HEADERS = {

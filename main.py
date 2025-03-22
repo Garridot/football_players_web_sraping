@@ -1,33 +1,38 @@
-from requests.exceptions import ConnectionError, RequestException
-from auth import get_auth_token
+import pika
+import json
 from players_url import PLAYERS_URL
 from logger_config import logger
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from scrapper import scraper_stats
-from config import set_token
+from config import CLOUDAMQP_URL
 
-# Obtain the token and store it in the config.py file.
-token = get_auth_token()
-set_token(token)
+try:
+    # Connect to RabbitMQ using the CloudAMQP URL
+    connection = pika.BlockingConnection(pika.URLParameters(CLOUDAMQP_URL))
+    channel = connection.channel()
+    logger.info("Connected to RabbitMQ")
+except pika.exceptions.AMQPConnectionError as e:
+    logger.error(f"Failed to connect to RabbitMQ: {e}")
+    exit(1)  # Exit script if unable to connect
 
-if __name__ == "__main__":
-    with ThreadPoolExecutor(max_workers=5) as executor: 
-        # Send the tasks to the executor.
-        future_to_player = {executor.submit(scraper_stats, player, True): player for player in PLAYERS_URL}
+# Declare the queue
+channel.queue_declare(queue='scraping_tasks', durable=True)
 
-        # Gat the results as they are finished.
-        for future in as_completed(future_to_player):
-            player = future_to_player[future]
-            try:
-                future.result()  # Obtain the outcome (or exception) of the task.
-            except ConnectionError as e:
-                logger.error(f"Connection error processing {player['name']}: {e}")
-            except RequestException as e:
-                logger.error(f"Request error processing {player['name']}: {e}")
-            except Exception as e:
-                logger.error(f"Unexpected error processing {player['name']}: {e}")
+# Send messages to the queue
+for player in PLAYERS_URL:
+    message = {
+        'player_id': player['id'],
+        'player_name': player['name'],
+        'player_url': player['url'],
+        'update': True
+    }
+    channel.basic_publish(
+        exchange='',
+        routing_key='scraping_tasks',
+        body=json.dumps(message),
+        properties=pika.BasicProperties(
+            delivery_mode=2,  # Make the message persistent
+        ))
+    logger.info(f"Sent scraping task for {player['name']}")
 
-
-
-   
-
+# Close connection
+connection.close()
+logger.info("Connection to RabbitMQ closed")

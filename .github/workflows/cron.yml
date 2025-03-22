@@ -1,43 +1,68 @@
-name: Cron Job | Web Scraping 
+name: Cron Job | Web Scraping with RabbitMQ
 
 on:
   schedule:
     - cron: '0 0 * * *' # schedule the task to run every day at midnight
 
 jobs:
-  run_script:
+  run_producer:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8.x
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8.x
 
-    
-    - name: Send Request to Keep Awake
-      run: curl -s -I https://football-player-charts-stats-api.onrender.com/    
+      - name: Send Request to Keep Awake
+        run: curl -s -I https://football-player-charts-stats-api.onrender.com/
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Test Transfermarkt Access
-      run: |
-        curl -s -I -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://www.transfermarkt.com/
+      - name: Test Transfermarkt Access
+        run: |
+          curl -s -I -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://www.transfermarkt.com/
 
-    - name: Run script
-      env:        
-          API_AUTH_URL         : ${{ secrets.API_AUTH_URL }}  
-          API_PLAYER_STATS_URL : ${{ secrets.API_PLAYER_STATS_URL }}
-          API_STATS_BY_POSITION_URL : ${{secrets.API_STATS_BY_POSITION_URL}}
-          API_PLAYERS_URL      : ${{ secrets.API_PLAYERS_URL }} 
-          EMAIL                : ${{ secrets.EMAIL }}
-          PASSWORD             : ${{ secrets.PASSWORD }} 
-      run: |        
-        python main.py
-       
+      - name: Run producer script
+        env:
+          CLOUDAMQP_URL: ${{ secrets.CLOUDAMQP_URL }} 
+        run: |
+          python main.py
+
+  run_consumer:
+    runs-on: ubuntu-latest
+    needs: run_producer 
+    strategy:
+      matrix:
+        worker_count: [1, 2, 3, 4, 5] 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8.x
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run consumer script
+        env:
+          CLOUDAMQP_URL: ${{ secrets.CLOUDAMQP_URL }} 
+          API_AUTH_URL: ${{ secrets.API_AUTH_URL }}  
+          API_PLAYER_STATS_URL: ${{ secrets.API_PLAYER_STATS_URL }}  
+          API_STATS_BY_POSITION_URL: ${{ secrets.API_STATS_BY_POSITION_URL }}  
+          API_PLAYERS_URL: ${{ secrets.API_PLAYERS_URL }}  
+          EMAIL: ${{ secrets.EMAIL }}  
+          PASSWORD: ${{ secrets.PASSWORD }}  
+        run: |
+          python consumer.py
