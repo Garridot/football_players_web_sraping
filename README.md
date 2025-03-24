@@ -72,11 +72,14 @@ python consumer.py
 
 ### Architecture 🏗️
 ```mermaid
-graph TD
-    A[main.py] -->|Sends messages| B[RabbitMQ]
-    B -->|Task queue| C[consumer.py]
-    C -->|Scraping| D[Transfermarkt]
-    C -->|Sends data| E[API REST]
+sequenceDiagram
+    Producer->>+RabbitMQ: Enqueue scraping task
+    RabbitMQ->>+Consumer: Deliver task
+    Consumer->>+Transfermarkt: Scrape data
+    Transfermarkt-->>-Consumer: Return HTML
+    Consumer->>+DataProcessor: Clean/transform
+    DataProcessor-->>-Consumer: Structured data
+    Consumer->>+API: POST processed data
 ```
 ### GitHub Actions Workflow 🤖
 ```yaml
