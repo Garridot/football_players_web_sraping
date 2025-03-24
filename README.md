@@ -1,33 +1,108 @@
-# Football Players Stats Api
+# Football Players Web Scraper & Stats Processor ⚽📊
 
-This Python web scraping project focuses on extracting football player statistics from the [Transfermarkt](https://www.transfermarkt.us/) website. The main script, **main.py**, uses the BeautifulSoup library to parse the HTML content of web pages and extract the necessary information. The schedule to run this script is configured using GitHub Actions.
+![Python](https://img.shields.io/badge/python-3.8%2B-blue)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3.9%2B-orange)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-enabled-green)
 
-## Project Structure
-- .github/workflows
-    - cron.yml
-- .gitignore
-- main.py
-- requirements.txt
-- Readme.md
+This automated ETL pipeline extracts player statistics from Transfermarkt, transforms the data, and loads it into a REST API using message queuing for scalable processing.
 
-## Structure Description
-- **.github/workflows/cron.yml**: GitHub Actions configuration file that sets the schedule to run the web scraping script at midnight every day.
+## Project Structure 🗂️
 
-- **.gitignore**: File specifying files and directories to be ignored when committing to Git.
-
-- **main.py**: The main script that performs web scraping of football player statistics. It utilizes BeautifulSoup, pandas, and requests.
-
-- **requirements.txt**: File listing project dependencies and their versions.
-
-## Running the Script
-The main.py script extracts data from various football players and updates the statistics on a local API. Make sure to have the dependencies installed by running:
-
+```plaintext
+/project
+├── main.py            # Producer: sends tasks to RabbitMQ
+├── consumer.py        # Consumer: processes scraping tasks
+├── scrapper.py        # Web scraping logic with BeautifulSoup
+├── config.py          # Configuration (environment variables)
+├── auth.py            # API authentication
+├── data_manager.py    # Data processing (Pandas)
+├── logger_config.py   # Logging configuration
+├── save_data.py       # API saving functions
+├── requirements.txt   # Dependencies
+└── .github/workflows  # CI/CD with GitHub Actions
 ```
+### Prerequisites 📋
+
+* Python 3.8+
+* CloudAMQP account (free plan available)
+
+### Configuration ⚙️
+
+1.  VEnvironment variables: Create a ```.env``` file based on this example:
+```plaintext
+# .env.example
+# .env.example
+API_AUTH_URL=https://your-api.com/auth/
+API_PLAYERS_URL=https://your-api.com/players/
+API_PLAYER_STATS_URL=https://your-api.com/stats/
+API_STATS_BY_POSITION_URL=https://your-api.com/position-stats/
+EMAIL=your_email@api.com
+PASSWORD=your_password
+CLOUDAMQP_URL=amqps://user:pass@host/vhost
+```
+2. Install dependencies:
+```pip 
 pip install -r requirements.txt
 ```
-Then, execute the script:
-```
+
+### Usage 🚀
+#### Local Execution
+1. Producer (sends tasks):
+```bash
 python main.py
 ```
+2. Consumer (processes tasks):
+```bash
+python consumer.py
+```
+#### Production Execution
+* System runs automatically daily at midnight UTC via GitHub Actions.
+* Consumers can be scaled in parallel for better performance.
 
-The script will extract player statistics and update them in [Football Players Stats Api](https://github.com/Garridot/football-players-stats-api).
+### 🧩 Core Components
+#### Producer (main.py)
+* Creates scraping tasks
+* Manages RabbitMQ connections
+* Handles task prioritization
+
+#### Consumer (consumer.py)
+* Processes tasks from queue
+* Implements exponential backoff for retries
+* Manages API authentication
+
+### Architecture 🏗️
+```mermaid
+graph TD
+    A[main.py] -->|Sends messages| B[RabbitMQ]
+    B -->|Task queue| C[consumer.py]
+    C -->|Scraping| D[Transfermarkt]
+    C -->|Sends data| E[API REST]
+```
+### GitHub Actions Workflow 🤖
+```yaml
+name: Cron Job
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Daily execution at midnight UTC
+jobs:
+  run_producer:
+    # Sends tasks to RabbitMQ
+  run_consumer:
+    needs: run_producer  # Sequential dependency
+    # Processes tasks with 3 parallel workers
+```
+### Error Handling ⚠️
+* Automatic retries on connection failures
+* Persistent queues in RabbitMQ
+
+### Future Improvements 🔮
+* Add monitoring with Prometheus/Grafana
+* Implement dead-letter queue for failed messages
+* Dockerize the application
+
+### Contributing 🤝
+1. Fork the project
+2. Create your branch (```git checkout -b feature/fooBar```)
+3. Commit your changes (```git commit -am 'Add some fooBar'```)
+4. Push to the branch (```git push origin feature/fooBar```)
+5. Open a Pull Request
