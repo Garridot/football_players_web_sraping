@@ -22,7 +22,7 @@ for player in PLAYERS_URL:
         'player_id': player['id'],
         'player_name': player['name'],
         'player_url': player['url'],
-        'update': True
+        'update': False
     }
     channel.basic_publish(
         exchange='',
