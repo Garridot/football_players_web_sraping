@@ -33,7 +33,7 @@ def setup_scraping(url):
         logger.error(f"Error accessing {url}: {e}")
         return None    
 
-def scraper_stats(player, update=False):
+def scraper_stats(player, update=True):
     """
     Get player statistics and call the web_scraping function.
     """
