@@ -18,7 +18,7 @@ jobs:
           python-version: 3.8.x
 
       - name: Send Request to Keep Awake
-        run: curl -s -I https://football-player-charts-stats-api.onrender.com/
+        run: curl -s -I https://football-players-stats-api.vercel.app/
 
       - name: Install dependencies
         run: |
