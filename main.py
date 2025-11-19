@@ -22,7 +22,7 @@ for player in PLAYERS_URL:
         'player_id': player['id'],
         'player_name': player['name'],
         'player_url': player['url'],
-        'update': False
+        'update': True
     }
     channel.basic_publish(
         exchange='',
@@ -31,7 +31,7 @@ for player in PLAYERS_URL:
         properties=pika.BasicProperties(
             delivery_mode=2,  # Make the message persistent
         ))
-    logger.info(f"Sent scraping task for {player['name']}")
+    logger.info(f"Sent scraping task for {player['name']}. Update Data: {message['update']}")
 
 # Close connection
 connection.close()
